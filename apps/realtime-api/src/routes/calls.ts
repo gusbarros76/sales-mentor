@@ -4,6 +4,7 @@ import { z } from "zod";
 import { config } from "../config";
 import { pool } from "../db";
 import { SessionTokenPayload } from "../types";
+import { generateReport, saveReport, getReport } from '../services/report';
 
 const createCallSchema = z.object({
   company_id: z.string().uuid(),
@@ -70,25 +71,45 @@ export async function registerCallRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: "missing_call_id" });
     }
 
-    const update = await pool.query(
-      `UPDATE calls
-       SET status = 'ENDED', ended_at = COALESCE(ended_at, now())
-       WHERE id = $1
-       RETURNING id, company_id, agent_id, status, ended_at`,
-      [call_id]
-    );
+    try {
+      // 1. Atualizar status da call
+      const update = await pool.query(
+        `UPDATE calls
+         SET status = 'ENDED', ended_at = COALESCE(ended_at, now())
+         WHERE id = $1
+         RETURNING id, company_id, agent_id, status, ended_at`,
+        [call_id]
+      );
 
-    if (!update.rowCount) {
-      return reply.status(404).send({ error: "call_not_found" });
+      if (!update.rowCount) {
+        return reply.status(404).send({ error: "call_not_found" });
+      }
+
+      const row = update.rows[0];
+      app.log.info(
+        { call_id, company_id: row.company_id, agent_id: row.agent_id },
+        "call stopped"
+      );
+
+      // 2. Gerar relatório
+      app.log.info({ call_id }, 'Generating post-call report...');
+      const { markdown, json } = await generateReport(pool, call_id);
+
+      // 3. Salvar relatório
+      const reportId = await saveReport(pool, call_id, markdown, json);
+      app.log.info({ call_id, reportId }, 'Report generated and saved');
+
+      return reply.send({
+        status: "ENDED",
+        call_id,
+        report_id: reportId,
+        ended_at: row.ended_at,
+        message: 'Call ended and report generated'
+      });
+    } catch (err) {
+      app.log.error({ err, call_id }, 'Failed to stop call or generate report');
+      return reply.status(500).send({ error: 'Failed to stop call' });
     }
-
-    const row = update.rows[0];
-    app.log.info(
-      { call_id, company_id: row.company_id, agent_id: row.agent_id },
-      "call stopped"
-    );
-
-    return reply.send({ status: "ENDED", ended_at: row.ended_at });
   });
 
   app.get("/v1/calls/:call_id/report", async (request, reply) => {
@@ -97,19 +118,23 @@ export async function registerCallRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: "missing_call_id" });
     }
 
-    const report = await pool.query(
-      "SELECT report_md, report_json FROM reports WHERE call_id = $1 LIMIT 1",
-      [call_id]
-    );
+    try {
+      const report = await getReport(pool, call_id);
 
-    if (!report.rowCount) {
-      return reply.send({ status: "PENDING" });
+      if (!report) {
+        return reply.status(404).send({ error: 'Report not found for this call' });
+      }
+
+      return reply.send({
+        call_id: report.call_id,
+        report_md: report.report_md,
+        report_json: report.report_json,
+        created_at: report.created_at
+      });
+    } catch (err) {
+      app.log.error({ err, call_id }, 'Failed to fetch report');
+      return reply.status(500).send({ error: 'Failed to fetch report' });
     }
-
-    return reply.send({
-      report_md: report.rows[0].report_md,
-      report_json: report.rows[0].report_json,
-    });
   });
 }
 

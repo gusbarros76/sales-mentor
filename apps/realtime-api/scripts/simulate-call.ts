@@ -175,11 +175,29 @@ async function main() {
     await simulateCall(callData);
 
     console.log('\n✅ SIMULAÇÃO CONCLUÍDA COM SUCESSO!');
-    console.log('\nPróximos passos:');
-    console.log('1. Revisar os insights gerados');
-    console.log('2. Validar se cooldown funcionou');
-    console.log('3. Verificar logs da API');
-    console.log('4. Prosseguir para Fase 3 se tudo estiver OK');
+
+    // Após simulação completa, encerrar call e gerar relatório
+    console.log('\n🔄 Encerrando call e gerando relatório...\n');
+
+    const stopResponse = await fetch(`http://localhost:8080/v1/calls/${callData.call_id}/stop`, {
+      method: 'POST'
+    });
+
+    const stopData = await stopResponse.json();
+    console.log('✅ Call encerrada:', stopData.status);
+    console.log('📄 Report ID:', stopData.report_id);
+
+    // Buscar relatório gerado
+    console.log('\n📥 Buscando relatório gerado...\n');
+
+    const reportResponse = await fetch(`http://localhost:8080/v1/calls/${callData.call_id}/report`);
+    const reportData = await reportResponse.json();
+
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('📄 RELATÓRIO FINAL');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+    console.log(reportData.report_md);
+    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
     process.exit(0);
   } catch (err) {

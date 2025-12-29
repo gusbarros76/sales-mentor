@@ -13,6 +13,7 @@ import { SessionTokenPayload } from "../types";
 import { detectCategory, getCooldownMs } from '../engine/rules';
 import { CooldownManager } from '../engine/cooldown';
 import { generateInsightCard } from '../engine/openai';
+import { saveInsight } from '../services/insights';
 
 const cooldownManager = new CooldownManager();
 
@@ -188,6 +189,24 @@ export function registerInsightWs(app: FastifyInstance, engine: RuleEngine) {
                 });
 
                 cooldownManager.markTriggered(callId, category);
+
+                // Salvar insight no banco
+                try {
+                  await saveInsight(pool, {
+                    call_id: callId,
+                    type: category,
+                    confidence: 0.8,
+                    quote: message.text,
+                    suggestions: card.suggestions,
+                    title: card.title,
+                    question: card.question,
+                    model_provider: 'openai',
+                    model_name: 'gpt-4o-mini'
+                  });
+                  app.log.debug({ callId, category }, 'Insight saved to database');
+                } catch (err) {
+                  app.log.error({ err, callId, category }, 'Failed to save insight');
+                }
 
                 // Enviar insight para extensão
                 ws.send(JSON.stringify({
