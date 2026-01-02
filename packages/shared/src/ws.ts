@@ -15,11 +15,11 @@ export const InsightCategoryEnum = z.enum([
 export const ClientSegmentSchema = z.object({
   event: z.literal("client_segment"),
   call_id: z.string().uuid(),
-  speaker: z.literal("CLIENTE"),
+  speaker: SpeakerEnum, // ✅ Aceita VENDEDOR e CLIENTE
   text: z.string().min(1),
   start_ms: z.number().int().nonnegative().optional(),
   end_ms: z.number().int().nonnegative().optional(),
-  source: z.literal("TAB"),
+  source: SourceEnum, // ✅ Aceita MIC e TAB
   asr_confidence: z.number().min(0).max(1).optional(),
   is_echo_suspected: z.boolean().optional(),
 });

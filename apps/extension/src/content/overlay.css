@@ -1,0 +1,30 @@
+/* Animação para cards de insight */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Scrollbar customizada */
+#sales-mentor-overlay #transcript::-webkit-scrollbar {
+  width: 6px;
+}
+
+#sales-mentor-overlay #transcript::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 10px;
+}
+
+#sales-mentor-overlay #transcript::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 10px;
+}
+
+#sales-mentor-overlay #transcript::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
