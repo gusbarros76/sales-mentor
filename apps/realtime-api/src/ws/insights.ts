@@ -12,10 +12,12 @@ import { RuleEngine } from "../rules/engine";
 import { SessionTokenPayload } from "../types";
 import { detectCategory, getCooldownMs } from '../engine/rules';
 import { CooldownManager } from '../engine/cooldown';
-import { generateInsightCard } from '../engine/openai';
+import { generateInsightCard, generateContextualInsight } from '../engine/openai';
 import { saveInsight } from '../services/insights';
+import { getRecentClientSegments } from '../services/segments';
 
 const cooldownManager = new CooldownManager();
+const CONTEXTUAL_INTERVAL_MS = 45_000; // 45s para análise contextual
 
 export function registerInsightWs(app: FastifyInstance, engine: RuleEngine) {
   app.get(
@@ -108,6 +110,7 @@ export function registerInsightWs(app: FastifyInstance, engine: RuleEngine) {
       // CRITICAL: Register event handlers SYNCHRONOUSLY before any async work
       // This ensures the WebSocket handshake completes properly
       let isAuthenticated = false;
+      let contextualTimer: NodeJS.Timeout | null = null;
 
       ws.on("message", async (buffer: Buffer | string) => {
         if (!isAuthenticated) {
@@ -208,14 +211,18 @@ export function registerInsightWs(app: FastifyInstance, engine: RuleEngine) {
                   app.log.error({ err, callId, category }, 'Failed to save insight');
                 }
 
-                // Enviar insight para extensão
+                // Enviar insight para extensão (com todos os novos campos)
                 ws.send(JSON.stringify({
                   type: 'insight',
                   call_id: callId,
                   category,
                   title: card.title,
+                  urgency: card.urgency,
+                  context: card.context,
                   suggestions: card.suggestions,
                   question: card.question,
+                  pitfalls: card.pitfalls,
+                  script: card.script,
                   quote: message.text,
                   ts: Date.now()
                 }));
@@ -241,6 +248,11 @@ export function registerInsightWs(app: FastifyInstance, engine: RuleEngine) {
       });
 
       ws.on("close", () => {
+        // Limpar timer contextual
+        if (contextualTimer) {
+          clearInterval(contextualTimer);
+          contextualTimer = null;
+        }
         app.log.info({ call_id: callId }, "WS: connection closed");
       });
 
@@ -304,6 +316,84 @@ export function registerInsightWs(app: FastifyInstance, engine: RuleEngine) {
             { call_id: callId, company_id: payload.company_id, agent_id: payload.agent_id },
             "WS authenticated"
           );
+
+          // Iniciar timer de análise contextual (45s)
+          contextualTimer = setInterval(async () => {
+            try {
+              // Verificar cooldown global antes de processar
+              if (!cooldownManager.canTriggerGlobal(callId)) {
+                const timeSince = cooldownManager.getTimeSinceLastInsight(callId);
+                app.log.debug(
+                  { callId, timeSinceLastMs: timeSince },
+                  'Contextual: skipping (global cooldown active)'
+                );
+                return;
+              }
+
+              // Buscar últimos 5 segmentos do CLIENTE
+              const recentSegments = await getRecentClientSegments(pool, callId, 5);
+
+              if (recentSegments.length < 2) {
+                app.log.debug({ callId }, 'Contextual: not enough segments');
+                return;
+              }
+
+              app.log.info(
+                { callId, segmentCount: recentSegments.length },
+                'Contextual: analyzing conversation'
+              );
+
+              // Gerar insight contextual
+              const card = await generateContextualInsight(recentSegments);
+
+              if (!card) {
+                app.log.debug({ callId }, 'Contextual: no insight needed');
+                return;
+              }
+
+              // Marcar insight como disparado (cooldown global)
+              cooldownManager.markTriggered(callId, 'BUYING_SIGNAL'); // Categoria genérica
+
+              // Salvar insight no banco
+              try {
+                await saveInsight(pool, {
+                  call_id: callId,
+                  type: 'BUYING_SIGNAL', // Categoria genérica para contextual
+                  confidence: 0.7,
+                  quote: recentSegments[recentSegments.length - 1].text,
+                  suggestions: card.suggestions,
+                  title: card.title,
+                  question: card.question,
+                  model_provider: 'openai',
+                  model_name: 'gpt-4o-mini'
+                });
+              } catch (err) {
+                app.log.error({ err, callId }, 'Contextual: failed to save insight');
+              }
+
+              // Enviar insight para extensão
+              ws.send(JSON.stringify({
+                type: 'insight',
+                call_id: callId,
+                category: 'CONTEXTUAL', // Marcador especial
+                title: card.title,
+                urgency: card.urgency,
+                context: card.context,
+                suggestions: card.suggestions,
+                question: card.question,
+                pitfalls: card.pitfalls,
+                script: card.script,
+                quote: recentSegments[recentSegments.length - 1].text,
+                ts: Date.now()
+              }));
+
+              app.log.info({ callId, title: card.title }, 'Contextual: insight sent');
+            } catch (err) {
+              app.log.error({ err, callId }, 'Contextual: analysis failed');
+            }
+          }, CONTEXTUAL_INTERVAL_MS);
+
+          app.log.info({ callId, intervalMs: CONTEXTUAL_INTERVAL_MS }, 'Contextual timer started');
         } catch (err) {
           app.log.error({ err, call_id: callId }, "ws setup failed");
           try {

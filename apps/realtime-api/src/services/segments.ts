@@ -45,3 +45,24 @@ export async function getSegmentsByCallId(pool: Pool, callId: string): Promise<a
   const result = await pool.query(query, [callId]);
   return result.rows;
 }
+
+/**
+ * Busca os últimos N segmentos do CLIENTE para análise contextual
+ */
+export async function getRecentClientSegments(
+  pool: Pool,
+  callId: string,
+  limit: number = 5
+): Promise<Array<{ text: string; created_at: Date }>> {
+  const query = `
+    SELECT text, created_at
+    FROM segments
+    WHERE call_id = $1 AND speaker = 'CLIENTE'
+    ORDER BY created_at DESC
+    LIMIT $2
+  `;
+
+  const result = await pool.query(query, [callId, limit]);
+  // Retornar em ordem cronológica (mais antigo primeiro)
+  return result.rows.reverse();
+}

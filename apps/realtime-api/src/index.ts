@@ -1,5 +1,6 @@
 import fastify from "fastify";
 import websocket from "@fastify/websocket";
+import cors from "@fastify/cors";
 import { config } from "./config";
 import { registerCallRoutes } from "./routes/calls";
 import { registerInsightWs } from "./ws/insights";
@@ -12,7 +13,32 @@ async function main() {
     },
   });
 
-  // Register websocket plugin first
+  // Register CORS first (before routes)
+  await app.register(cors, {
+    origin: (origin, callback) => {
+      // Durante desenvolvimento, permitir tudo
+      // WebSockets de extensions não enviam Origin da mesma forma
+      app.log.info({ origin }, 'CORS check');
+
+      // Sempre permitir (modo desenvolvimento)
+      callback(null, true);
+
+      /* Produção - descomentar:
+      if (!origin || origin.startsWith('chrome-extension://')) {
+        callback(null, true);
+        return;
+      }
+      if (origin === 'http://localhost:5173' || origin === 'http://localhost:8080') {
+        callback(null, true);
+        return;
+      }
+      callback(new Error('Not allowed by CORS'), false);
+      */
+    },
+    credentials: true
+  });
+
+  // Register websocket plugin
   await app.register(websocket);
 
   const engine = new RuleEngine({

@@ -24,9 +24,12 @@ export const RULES: Rule[] = [
       'quero fazer',
       'gostei',
       'interessante',
-      'pode ser'
+      'pode ser',
+      'faz sentido',
+      'gostaria',
+      'me convenceu'
     ],
-    cooldownMs: 90_000 // 90s
+    cooldownMs: 60_000 // 60s (reduzido de 90s)
   },
   {
     category: 'PRICE',
@@ -37,9 +40,13 @@ export const RULES: Rule[] = [
       'investimento',
       'orçamento',
       'quanto fica',
-      'quanto é'
+      'quanto é',
+      'cabe no orçamento',
+      'roi',
+      'retorno',
+      'desconto'
     ],
-    cooldownMs: 120_000 // 120s
+    cooldownMs: 60_000 // 60s (reduzido de 120s)
   },
   {
     category: 'OBJECTION',
@@ -50,9 +57,12 @@ export const RULES: Rule[] = [
       'já uso',
       'não agora',
       'talvez depois',
-      'vou avaliar'
+      'vou avaliar',
+      'não sei se',
+      'não tenho como',
+      'complicado'
     ],
-    cooldownMs: 90_000
+    cooldownMs: 60_000 // 60s (reduzido de 90s)
   },
   {
     category: 'HOW_IT_WORKS',
@@ -62,9 +72,12 @@ export const RULES: Rule[] = [
       'qual o processo',
       'não entendi',
       'pode detalhar',
-      'como é'
+      'como é',
+      'como faz',
+      'quais passos',
+      'dúvida'
     ],
-    cooldownMs: 120_000
+    cooldownMs: 60_000 // 60s (reduzido de 120s)
   },
   {
     category: 'NEXT_STEP',
@@ -75,9 +88,12 @@ export const RULES: Rule[] = [
       'como seguir',
       'manda proposta',
       'me envia',
-      'agenda'
+      'agenda',
+      'quando começa',
+      'prazo',
+      'cronograma'
     ],
-    cooldownMs: 120_000
+    cooldownMs: 60_000 // 60s (reduzido de 120s)
   },
   {
     category: 'RISK',
@@ -87,9 +103,12 @@ export const RULES: Rule[] = [
       'risco',
       'e se não der certo',
       'garantia',
-      'seguro'
+      'seguro',
+      'problema',
+      'e se falhar',
+      'confiança'
     ],
-    cooldownMs: 90_000
+    cooldownMs: 60_000 // 60s (reduzido de 90s)
   }
 ];
 

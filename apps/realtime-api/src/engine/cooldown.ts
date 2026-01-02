@@ -7,13 +7,38 @@ interface CooldownEntry {
   lastTriggeredAt: number;
 }
 
+interface GlobalCooldown {
+  lastInsightAt: number;
+}
+
 export class CooldownManager {
   private cooldowns = new Map<string, CooldownEntry[]>();
+  private globalCooldowns = new Map<string, GlobalCooldown>();
+  private readonly GLOBAL_COOLDOWN_MS = 25_000; // 25s entre qualquer insight (reduzido de 40s)
+
+  /**
+   * Verifica cooldown GLOBAL (entre qualquer tipo de insight)
+   */
+  canTriggerGlobal(callId: string): boolean {
+    const global = this.globalCooldowns.get(callId);
+    if (!global) {
+      return true; // Primeiro insight
+    }
+
+    const elapsed = Date.now() - global.lastInsightAt;
+    return elapsed >= this.GLOBAL_COOLDOWN_MS;
+  }
 
   /**
    * Verifica se pode disparar insight para esta call + categoria
    */
   canTrigger(callId: string, category: InsightCategory, cooldownMs: number): boolean {
+    // Primeiro verifica cooldown global
+    if (!this.canTriggerGlobal(callId)) {
+      return false;
+    }
+
+    // Depois verifica cooldown por categoria
     const entries = this.cooldowns.get(callId) || [];
     const now = Date.now();
 
@@ -34,7 +59,7 @@ export class CooldownManager {
     const entries = this.cooldowns.get(callId) || [];
     const now = Date.now();
 
-    // Atualizar ou adicionar
+    // Atualizar cooldown da categoria
     const existing = entries.find(e => e.category === category);
     if (existing) {
       existing.lastTriggeredAt = now;
@@ -43,6 +68,20 @@ export class CooldownManager {
     }
 
     this.cooldowns.set(callId, entries);
+
+    // Atualizar cooldown global
+    this.globalCooldowns.set(callId, { lastInsightAt: now });
+  }
+
+  /**
+   * Retorna tempo desde último insight (qualquer tipo)
+   */
+  getTimeSinceLastInsight(callId: string): number {
+    const global = this.globalCooldowns.get(callId);
+    if (!global) {
+      return Infinity; // Nunca teve insight
+    }
+    return Date.now() - global.lastInsightAt;
   }
 
   /**
@@ -50,5 +89,6 @@ export class CooldownManager {
    */
   clear(callId: string): void {
     this.cooldowns.delete(callId);
+    this.globalCooldowns.delete(callId);
   }
 }

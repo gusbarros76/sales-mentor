@@ -13,10 +13,69 @@ const createCallSchema = z.object({
   metadata: z.record(z.any()).optional(),
 });
 
+// Simplified schema for extension (just meeting_url)
+const createCallSimpleSchema = z.object({
+  meeting_url: z.string().url(),
+});
+
 export async function registerCallRoutes(app: FastifyInstance) {
   app.get("/health", async () => ({ ok: true }));
 
   app.post("/v1/calls", async (request, reply) => {
+    // Try simple schema first (for extension)
+    const simpleResult = createCallSimpleSchema.safeParse(request.body);
+
+    if (simpleResult.success) {
+      // Extension flow: use default company/agent
+      const { meeting_url } = simpleResult.data;
+
+      app.log.info({ meeting_url }, "Creating call from extension");
+
+      // Get default company and agent (from seed data)
+      const defaultCompany = await pool.query(
+        "SELECT id FROM companies LIMIT 1"
+      );
+      if (!defaultCompany.rowCount) {
+        return reply.status(500).send({ error: "no_default_company_found" });
+      }
+      const company_id = defaultCompany.rows[0].id;
+
+      const defaultAgent = await pool.query(
+        "SELECT id FROM agents WHERE company_id = $1 LIMIT 1",
+        [company_id]
+      );
+      if (!defaultAgent.rowCount) {
+        return reply.status(500).send({ error: "no_default_agent_found" });
+      }
+      const agent_id = defaultAgent.rows[0].id;
+
+      const metadata = { meeting_url };
+      const title = `Google Meet: ${new URL(meeting_url).pathname.split('/').pop()}`;
+
+      const callInsert = await pool.query(
+        `INSERT INTO calls (company_id, agent_id, title, metadata, status, started_at)
+         VALUES ($1, $2, $3, $4, 'RUNNING', now())
+         RETURNING id, started_at`,
+        [company_id, agent_id, title, metadata]
+      );
+
+      const callId = callInsert.rows[0].id as string;
+      const payload: SessionTokenPayload = { call_id: callId, company_id, agent_id };
+      const sessionToken = jwt.sign(payload, config.jwtSecret, {
+        expiresIn: "4h",
+      });
+
+      app.log.info({ call_id: callId, token: sessionToken }, "Call created from extension");
+
+      // Return format expected by extension
+      return reply.send({
+        call_id: callId,
+        token: sessionToken,
+        meeting_url: meeting_url
+      });
+    }
+
+    // Try full schema (for full API)
     const parsed = createCallSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({
