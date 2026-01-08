@@ -51,14 +51,15 @@ COPY packages/shared/package.json ./packages/shared/
 # Install ONLY production dependencies
 RUN pnpm install --frozen-lockfile --prod
 
-# Copy built files from builder (entire dist with monorepo structure)
-COPY --from=builder /app/apps/realtime-api/dist ./dist
+# Copy compiled code from builder
+COPY --from=builder /app/apps/realtime-api/dist/apps/realtime-api ./apps/realtime-api/dist
+COPY --from=builder /app/apps/realtime-api/dist/packages/shared ./packages/shared/dist
 
 # Copy database migrations (needed for runtime migrations)
 COPY db ./db
 
-# Set working directory to root (dist already has full path structure)
-WORKDIR /app
+# Set working directory to realtime-api (where node_modules are)
+WORKDIR /app/apps/realtime-api
 
 # Expose port
 EXPOSE 8080
@@ -67,5 +68,5 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD node -e "require('http').get('http://localhost:8080/health', (r) => { process.exit(r.statusCode === 200 ? 0 : 1); });"
 
-# Start application
-CMD ["node", "dist/apps/realtime-api/src/index.js"]
+# Start application (dist/src/index.js is now relative to /app/apps/realtime-api)
+CMD ["node", "dist/src/index.js"]
