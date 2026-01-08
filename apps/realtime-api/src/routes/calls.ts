@@ -19,8 +19,6 @@ const createCallSimpleSchema = z.object({
 });
 
 export async function registerCallRoutes(app: FastifyInstance) {
-  app.get("/health", async () => ({ ok: true }));
-
   app.post("/v1/calls", async (request, reply) => {
     // Try simple schema first (for extension)
     const simpleResult = createCallSimpleSchema.safeParse(request.body);
