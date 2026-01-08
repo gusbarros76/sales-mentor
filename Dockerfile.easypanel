@@ -39,27 +39,26 @@ WORKDIR /app
 # Install pnpm
 RUN npm install -g pnpm@latest
 
-# Copy workspace configuration
-COPY pnpm-workspace.yaml ./
-COPY package.json pnpm-lock.yaml ./
-COPY tsconfig.base.json ./
-
-# Copy package.json files
+# Use pnpm deploy for production (creates standalone deployment)
+WORKDIR /source
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY apps/realtime-api/package.json ./apps/realtime-api/
 COPY packages/shared/package.json ./packages/shared/
 
-# Install ONLY production dependencies
-RUN pnpm install --frozen-lockfile --prod
+# Deploy realtime-api with its dependencies
+RUN pnpm --filter=realtime-api deploy /app/production --prod --legacy
 
 # Copy compiled code from builder
-COPY --from=builder /app/apps/realtime-api/dist/apps/realtime-api ./apps/realtime-api/dist
-COPY --from=builder /app/apps/realtime-api/dist/packages/shared ./packages/shared/dist
+WORKDIR /app/production
+COPY --from=builder /app/apps/realtime-api/dist/apps/realtime-api ./dist
+COPY --from=builder /app/apps/realtime-api/dist/packages/shared/src ./node_modules/@sales-mentor/shared/dist
+COPY packages/shared/package.json ./node_modules/@sales-mentor/shared/
 
 # Copy database migrations (needed for runtime migrations)
-COPY db ./db
+COPY db /app/db
 
-# Set working directory to realtime-api (where node_modules are)
-WORKDIR /app/apps/realtime-api
+# Set working directory
+WORKDIR /app/production
 
 # Expose port
 EXPOSE 8080
