@@ -14,15 +14,18 @@ RUN npm install -g pnpm@latest
 # Copy workspace configuration
 COPY pnpm-workspace.yaml ./
 COPY package.json pnpm-lock.yaml ./
+COPY tsconfig.base.json ./
 
-# Copy realtime-api package.json for dependency resolution
+# Copy all package.json files for dependency resolution
 COPY apps/realtime-api/package.json ./apps/realtime-api/
+COPY packages/shared/package.json ./packages/shared/
 
 # Install ALL dependencies (including devDependencies for build)
 RUN pnpm install --frozen-lockfile
 
-# Copy realtime-api source code
+# Copy source code
 COPY apps/realtime-api ./apps/realtime-api
+COPY packages/shared ./packages/shared
 
 # Build TypeScript
 WORKDIR /app/apps/realtime-api
@@ -39,9 +42,11 @@ RUN npm install -g pnpm@latest
 # Copy workspace configuration
 COPY pnpm-workspace.yaml ./
 COPY package.json pnpm-lock.yaml ./
+COPY tsconfig.base.json ./
 
-# Copy realtime-api package.json
+# Copy package.json files
 COPY apps/realtime-api/package.json ./apps/realtime-api/
+COPY packages/shared/package.json ./packages/shared/
 
 # Install ONLY production dependencies
 RUN pnpm install --frozen-lockfile --prod
@@ -49,6 +54,9 @@ RUN pnpm install --frozen-lockfile --prod
 # Copy built files from builder
 COPY --from=builder /app/apps/realtime-api/dist ./apps/realtime-api/dist
 COPY --from=builder /app/apps/realtime-api/scripts ./apps/realtime-api/scripts
+
+# Copy shared package (needed for runtime imports)
+COPY packages/shared ./packages/shared
 
 # Copy database migrations (needed for runtime migrations)
 COPY db ./db
