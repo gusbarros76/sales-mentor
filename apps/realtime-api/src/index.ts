@@ -38,6 +38,11 @@ async function main() {
     credentials: true
   });
 
+  // Health check endpoint
+  app.get("/health", async (_request, reply) => {
+    return reply.status(200).send({ status: "ok", timestamp: new Date().toISOString() });
+  });
+
   // Register websocket plugin
   await app.register(websocket);
 

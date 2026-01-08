@@ -1,5 +1,7 @@
 console.log('[SalesMentor] Content script loaded');
 
+import config from '../config';
+
 // ============================================
 // VARIÁVEIS GLOBAIS
 // ============================================
@@ -19,7 +21,8 @@ let lastProcessedText = ''; // Hash da última frase processada
 let lastCaptionTime = 0;
 let lastSpeaker: 'CLIENTE' | 'VENDEDOR' = 'CLIENTE';
 
-const BACKEND_URL = 'http://localhost:8080';
+const BACKEND_URL = config.backendUrl;
+const WS_URL = config.wsUrl;
 const CAPTION_DEBOUNCE_MS = 500;
 const SESSION_MAX_AGE_MS = 2 * 60 * 60 * 1000;
 const VENDEDOR_KEYWORDS = [
@@ -204,6 +207,16 @@ async function checkExistingSession() {
       return;
     }
 
+    // CRÍTICO: Verificar se é o MESMO Meet (mesma URL)
+    if (session.meet_url && session.meet_url !== window.location.href) {
+      console.log('[Content] ⚠️ Sessão de outro Meet detectada');
+      console.log('[Content]   - Sessão antiga:', session.meet_url);
+      console.log('[Content]   - Meet atual:', window.location.href);
+      console.log('[Content] 🗑️ Limpando sessão antiga e criando nova');
+      await clearStoredSession();
+      return;
+    }
+
     console.log('[Content] ♻️ Recuperando sessão existente do storage');
     callId = session.call_id;
     sessionToken = session.token;
@@ -323,7 +336,7 @@ function hideClosedCaptions() {
 // CONECTAR BACKEND WEBSOCKET
 // ============================================
 function connectBackendWebSocket(call_id: string, token: string) {
-  const wsUrl = `${BACKEND_URL.replace('http', 'ws')}/v1/ws?call_id=${call_id}&token=${encodeURIComponent(token)}`;
+  const wsUrl = `${WS_URL}/v1/ws?call_id=${call_id}&token=${encodeURIComponent(token)}`;
 
   console.log('[Content] 🔌 Conectando WebSocket backend:', wsUrl);
 

@@ -170,20 +170,44 @@ export function registerInsightWs(app: FastifyInstance, engine: RuleEngine) {
               call_id: callId,
               company_id: payload.company_id,
               agent_id: payload.agent_id,
+              speaker: message.speaker,
               text: message.text,
             },
             "segment stored"
           );
 
           // Processar com rules engine
+          app.log.debug(
+            { callId, speaker: message.speaker, text: message.text },
+            'WS: analyzing segment for insights'
+          );
+
           const category = detectCategory(message.text);
+
+          app.log.debug(
+            { callId, text: message.text, detectedCategory: category },
+            'WS: category detection result'
+          );
 
           if (category) {
             const cooldownMs = getCooldownMs(category);
+            const canTriggerGlobal = cooldownManager.canTriggerGlobal(callId);
             const canTrigger = cooldownManager.canTrigger(callId, category, cooldownMs);
 
+            app.log.debug(
+              {
+                callId,
+                category,
+                cooldownMs,
+                canTriggerGlobal,
+                canTrigger,
+                timeSinceLastInsight: cooldownManager.getTimeSinceLastInsight(callId)
+              },
+              'WS: cooldown check'
+            );
+
             if (canTrigger) {
-              app.log.info({ callId, category }, 'WS: generating insight');
+              app.log.info({ callId, category, text: message.text }, 'WS: generating insight');
 
               try {
                 const card = await generateInsightCard({
@@ -232,8 +256,21 @@ export function registerInsightWs(app: FastifyInstance, engine: RuleEngine) {
                 app.log.error({ err, callId, category }, 'WS: failed to generate insight');
               }
             } else {
-              app.log.debug({ callId, category }, 'WS: insight in cooldown');
+              app.log.info(
+                {
+                  callId,
+                  category,
+                  timeSinceLastInsight: cooldownManager.getTimeSinceLastInsight(callId),
+                  cooldownMs
+                },
+                'WS: insight blocked by cooldown'
+              );
             }
+          } else {
+            app.log.debug(
+              { callId, speaker: message.speaker, text: message.text },
+              'WS: no category detected for this segment'
+            );
           }
 
           const latency = Date.now() - started;
